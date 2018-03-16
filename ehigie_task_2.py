@@ -1,78 +1,74 @@
+#!/usr/bin/env python3
+
+#########################################
+# Author: Ehigie Pascal Aito
+# Email: aitoehigie@gmail.com
+# Date: 03/16/2018
+# Title: Refactored TrustYou test solution
+##########################################
+
 import re
 import unittest
 
-# Buffer to store current named entity
-WORD_BUFFER = []
-# Regular expression for matching a token at the beginning of a sentence
-TOKEN_RE = re.compile(r"([a-z]+)\s*(.*)$", re.I)
-# Regular expression to recognize an uppercase token
-UPPERCASE_RE = re.compile(r"[A-Z][a-z]*$")
+# Class based rewrite
 
-def pop_token(text):
-    """
-    Take the first token off the beginning of text. If its first letter is
-    capitalized, remember it in word buffer - we may have a named entity on our
-    hands!!
 
-    @return: Tuple (token, remaining_text). Token is None in case text is empty
-    """
-    global WORD_BUFFER
-    token_match = TOKEN_RE.match(text)
-    if token_match:
-        token = token_match.group(1)
-        if UPPERCASE_RE.match(token):
-            WORD_BUFFER.append(token)
+class NamedEntityRecognizer:
+    FIRST_SENT_TOKEN_RE = re.compile(r"([a-z]+)\s*(.*)$", re.I)
+    CAPITALIZED_TOKEN_RE = re.compile(r"[A-Z][a-z]*$")
+
+    def __init__(self, text):
+        # Removed global variable and used a 
+        # local buffer to store current named entity. 
+        self.named_entity_buffer = []
+        self.remaining_text = text
+
+    def update_buffer(self, entity_token):
+        if self.CAPITALIZED_TOKEN_RE.match(entity_token):
+            self.named_entity_buffer.append(entity_token)
         else:
-            WORD_BUFFER = []
-        return token, token_match.group(2)
-    return None, text
+            self.named_entity_buffer = []
 
-def extract_named_entity():
-    """
-    Return a named entity, if we have assembled one in the current buffer.
-    Returns None if we have to keep searching.
-    """
-    global WORD_BUFFER
-    if len(WORD_BUFFER) >= 2:
-        named_entity = " ".join(WORD_BUFFER)
-        WORD_BUFFER = []
-        return named_entity
+    def pop_token(self):
+        entity_match = self.FIRST_SENT_TOKEN_RE.match(self.remaining_text)
+        entity_token = None
 
-class NamedEntityTestCase(unittest.TestCase):
+        if entity_match:
+            entity_token = entity_match.group(1)
+            self.remaining_text = entity_match.group(2)
+            self.update_buffer(entity_token)
+        return True if entity_token else False
 
-    def test_ner_extraction(self):
 
-        # Remember to change this Unit test as well to follow the interface
-        # changes you propose above
-        
-        text = "When we went to Los Angeles last year we visited the Hollywood Sign"
+    def consume_named_entity_buffer(self):
+        if len(self.named_entity_buffer) >= 2:
+            named_entity = " ".join(self.named_entity_buffer)
+            self.named_entity_buffer = []
+            return named_entity
+        else:
+            return None
 
+    def extract_named_entities(self):
         entities = set()
-        while True:
-            token, text = pop_token(text)
-            if not token:
-                entity = extract_named_entity()
-                if entity:
-                    entities.add(entity)
-                break
 
-            entity = extract_named_entity()
+        while self.pop_token():
+            entity = self.consume_named_entity_buffer()
             if entity:
                 entities.add(entity)
 
+        return entities
+
+
+class NamedEntityTestCase(unittest.TestCase):
+    def test_ner_extraction(self):
+
+        text = "When we went to Los Angeles last year we visited the Hollywood Sign"
+
+        ner = NamedEntityRecognizer(text)
+        entities = ner.extract_named_entities()
+
         self.assertEqual(set(["Los Angeles", "Hollywood Sign"]), entities)
 
+
 if __name__ == "__main__":
-    
-    import sys
-    
-    # Test case names are passed in via sys.stdin, for scoring by remoteinterview.io
-    
-    for line in sys.stdin:
-        test_name = line.rstrip()
-        test_case = NamedEntityTestCase(test_name)
-        runner = unittest.TextTestRunner()
-        if runner.run(test_case).wasSuccessful():
-            print("OK")
-        else:
-            print("Test {} failed!".format(test_name))
+    unittest.main()
